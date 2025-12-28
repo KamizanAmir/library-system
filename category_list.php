@@ -7,6 +7,9 @@ if (empty($category_code)) {
     die("Ralat: Tiada kod kategori dipilih. Sila kembali ke menu utama.");
 }
 
+/**
+ * Fetch category details based on category code
+ */
 function getCategoryInfo($conn, $code)
 {
     $stmt = $conn->prepare("SELECT * FROM categories WHERE category_code = :code");
@@ -14,6 +17,10 @@ function getCategoryInfo($conn, $code)
     return $stmt->fetch(PDO::FETCH_ASSOC);
 }
 
+/**
+ * Fetch all books belonging to a specific category
+ * Ordered by shelf location for easier finding
+ */
 function getBooksByCategory($conn, $code)
 {
     $stmt = $conn->prepare("SELECT * FROM books WHERE category_code = :code ORDER BY shelf_location ASC");
@@ -21,6 +28,7 @@ function getBooksByCategory($conn, $code)
     return $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
+// Execute queries
 $category = getCategoryInfo($conn, $category_code);
 $books = getBooksByCategory($conn, $category_code);
 

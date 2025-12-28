@@ -1,26 +1,36 @@
 <?php
+// Start the session to manage user state and flash messages
 session_start();
+// Include database connection
 require 'db.php';
 
+// Initialize variables for messages
 $message = "";
 $msg_type = "";
+
+// Check if there is a flash message set in the session (e.g., from a redirect)
 if (isset($_SESSION['flash_message'])) {
     $message = $_SESSION['flash_message'];
     $msg_type = $_SESSION['flash_type'];
+    // Clear the message after assigning it, so it doesn't show again on refresh
     unset($_SESSION['flash_message']);
     unset($_SESSION['flash_type']);
 }
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
+    // Handle "Borrow Book" action
     if (isset($_POST['action']) && $_POST['action'] == 'borrow') {
+        // Sanitize input
         $book_code = trim($_POST['book_code']);
         $student_id = trim($_POST['student_id']);
         $student_name = trim($_POST['student_name']);
 
+        // Basic validation: Check if required fields are present
         if (empty($book_code) || empty($student_id)) {
             $_SESSION['flash_message'] = "Sila isi Kod Buku dan ID Pelajar.";
             $_SESSION['flash_type'] = "error";
         } else {
+            // Check if book exists in the database
             $stmt = $conn->prepare("SELECT * FROM books WHERE book_id = :id");
             $stmt->execute([':id' => $book_code]);
             $book = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -29,9 +39,11 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 $_SESSION['flash_message'] = "Buku tidak dijumpai (Kod salah).";
                 $_SESSION['flash_type'] = "error";
             } elseif ($book['is_available'] == 0) {
+                // Check if book is already borrowed
                 $_SESSION['flash_message'] = "Buku ini sedang dipinjam oleh orang lain.";
                 $_SESSION['flash_type'] = "error";
             } else {
+                // Check if reader (student) exists
                 $stmt = $conn->prepare("SELECT reader_id FROM readers WHERE student_id = :sid");
                 $stmt->execute([':sid' => $student_id]);
                 $reader = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -39,16 +51,22 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 if ($reader) {
                     $reader_id = $reader['reader_id'];
                 } else {
+                    // Start registration for new student if not found
                     if (empty($student_name)) $student_name = "Pelajar Baru";
                     $stmt = $conn->prepare("INSERT INTO readers (student_id, full_name) VALUES (:sid, :fname)");
                     $stmt->execute([':sid' => $student_id, ':fname' => $student_name]);
                     $reader_id = $conn->lastInsertId();
                 }
 
+                // Process the borrowing transaction
+                // Set due date to 14 days from today
                 $due_date = date('Y-m-d', strtotime('+14 days'));
+
+                // Insert transaction record
                 $stmt = $conn->prepare("INSERT INTO transactions (book_id, reader_id, due_date, return_date) VALUES (:bid, :rid, :due, NULL)");
                 $stmt->execute([':bid' => $book_code, ':rid' => $reader_id, ':due' => $due_date]);
 
+                // Update book status to unavailable (0)
                 $stmt = $conn->prepare("UPDATE books SET is_available = 0 WHERE book_id = :bid");
                 $stmt->execute([':bid' => $book_code]);
 
@@ -58,23 +76,28 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         }
     }
 
+    // Handle "Return Book" action
     if (isset($_POST['action']) && $_POST['action'] == 'return') {
         $book_code = trim($_POST['return_book_code']);
         $student_id = trim($_POST['return_student_id']);
 
+        // Validation
         if (empty($book_code) || empty($student_id)) {
             $_SESSION['flash_message'] = "Sila isi Kod Buku dan ID Pelajar untuk pemulangan.";
             $_SESSION['flash_type'] = "error";
         } else {
+            // Find active transaction (return_date IS NULL) for this book and student
             $sql = "SELECT t.trans_id FROM transactions t JOIN readers r ON t.reader_id = r.reader_id WHERE t.book_id = :bid AND r.student_id = :sid AND t.return_date IS NULL";
             $stmt = $conn->prepare($sql);
             $stmt->execute([':bid' => $book_code, ':sid' => $student_id]);
             $trans = $stmt->fetch(PDO::FETCH_ASSOC);
 
             if ($trans) {
+                // Update transaction with current Return Date
                 $stmt = $conn->prepare("UPDATE transactions SET return_date = NOW() WHERE trans_id = :tid");
                 $stmt->execute([':tid' => $trans['trans_id']]);
 
+                // Set book availability back to 1 (Available)
                 $stmt = $conn->prepare("UPDATE books SET is_available = 1 WHERE book_id = :bid");
                 $stmt->execute([':bid' => $book_code]);
 
@@ -86,21 +109,31 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             }
         }
     }
+    // Redirect to self to prevent form resubmission
     header("Location: index.php");
     exit();
 }
 
+// Gather Dashboard Statistics
 $stats = [
+    // Total number of transactions in history
     'total' => $conn->query("SELECT COUNT(*) FROM transactions")->fetchColumn(),
+    // Active loans (books not yet returned)
     'active' => $conn->query("SELECT COUNT(*) FROM transactions WHERE return_date IS NULL")->fetchColumn(),
+    // Overdue loans (active loans passed due date)
     'late' => $conn->query("SELECT COUNT(*) FROM transactions WHERE return_date IS NULL AND due_date < CURDATE()")->fetchColumn(),
+    // Loans approaching due date (within next 3 days)
     'almost_late' => $conn->query("SELECT COUNT(*) FROM transactions WHERE return_date IS NULL AND due_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 3 DAY)")->fetchColumn()
 ];
 
+// Fetch all book categories for the grid display
 $categories = $conn->query("SELECT * FROM categories")->fetchAll(PDO::FETCH_ASSOC);
 
+// Fetch 5 most recent transactions for the table
 $recent_transactions = $conn->query("SELECT t.*, r.full_name, r.student_id, b.title, b.book_id FROM transactions t JOIN readers r ON t.reader_id = r.reader_id JOIN books b ON t.book_id = b.book_id ORDER BY t.trans_id DESC LIMIT 5")->fetchAll(PDO::FETCH_ASSOC);
 
+// Prepare data for Genre Chart (Doughnut)
+// Group transactions by book category to see which genres are most popular
 $genre_sql = "SELECT c.category_name, COUNT(t.trans_id) as total 
               FROM transactions t 
               JOIN books b ON t.book_id = b.book_id 
@@ -115,6 +148,8 @@ foreach ($genre_data as $g) {
     $genre_values[] = $g['total'];
 }
 
+// Prepare data for Trend Chart (Line)
+// Group transactions by month to show activity trend
 $trend_sql = "SELECT DATE_FORMAT(borrow_date, '%M') as month_name, MONTH(borrow_date) as month_num, COUNT(*) as total 
               FROM transactions 
               GROUP BY month_num 
@@ -138,6 +173,8 @@ foreach ($trend_data as $t) {
     <title>Sistem Perpustakaan KVSP</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
+        /* Main CSS Styles for the dashboard layout */
+        /* Reset box model */
         * {
             box-sizing: border-box;
         }
@@ -575,7 +612,9 @@ foreach ($trend_data as $t) {
             <?php endforeach; ?>
         </div>
 
+        <!-- Main Action Area: Borrow and Return Forms -->
         <div class="operations-container">
+            <!-- Borrow Book Form -->
             <div class="op-card">
                 <div class="op-title"><span style="color:#e91e63">📑</span> Pinjaman Buku</div>
                 <form method="POST">
@@ -651,7 +690,9 @@ foreach ($trend_data as $t) {
         <div style="height:50px;"></div>
 
     </div>
+    <!-- Client-side Scripts for UI interactions and Chart initialization -->
     <script>
+        // Flash Message Auto-Dismissal
         const flashMsg = document.getElementById('flash-msg');
         if (flashMsg) {
             setTimeout(() => {

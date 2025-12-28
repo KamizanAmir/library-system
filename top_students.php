@@ -3,6 +3,9 @@ require 'db.php';
 
 $page_title = "Senarai Pelajar Contoh (Top 10 Peminjam)";
 
+// Fetch Top 10 Students who borrowed the most books
+// Group by student_id to count transactions
+// Order by total_books descending
 $sql = "SELECT r.student_id, r.full_name, COUNT(t.trans_id) as total_books 
         FROM transactions t 
         JOIN readers r ON t.reader_id = r.reader_id 

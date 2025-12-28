@@ -8,6 +8,9 @@ $readers = [];
 $categories = [];
 
 if ($q != '') {
+    // Search for Books
+    // Match Book ID or Title
+    // Start subquery to find who borrowed it last (for display purposes)
     $book_sql = "SELECT b.*, c.category_name,
                 (SELECT CONCAT(r.full_name, ' (', DATE_FORMAT(t.borrow_date, '%d/%m/%Y'), ')') 
                  FROM transactions t JOIN readers r ON t.reader_id = r.reader_id 
@@ -19,6 +22,9 @@ if ($q != '') {
     $stmt->execute([':q' => "%$q%"]);
     $books = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
+    // Search for Readers (Students)
+    // Match Student ID or Name
+    // Also count their total loans for context
     $reader_sql = "SELECT r.*, COUNT(t.trans_id) as total_loans 
                    FROM readers r 
                    LEFT JOIN transactions t ON r.reader_id = t.reader_id 
@@ -28,6 +34,8 @@ if ($q != '') {
     $stmt->execute([':q' => "%$q%"]);
     $readers = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
+    // Search for Categories
+    // Match Category Code or Name
     $cat_sql = "SELECT * FROM categories WHERE category_code LIKE :q OR category_name LIKE :q";
     $stmt = $conn->prepare($cat_sql);
     $stmt->execute([':q' => "%$q%"]);
@@ -43,6 +51,7 @@ if ($q != '') {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Carian: <?php echo htmlspecialchars($q); ?></title>
     <style>
+        /* CSS for Search Result Page */
         body {
             font-family: 'Segoe UI', sans-serif;
             background-color: #f0f8ff;
@@ -121,6 +130,7 @@ if ($q != '') {
         </div>
 
         <?php if (count($readers) > 0): ?>
+            <!-- Results: Student Matches -->
             <div class="result-section">
                 <div class="section-title">👤 Pelajar Ditemui</div>
                 <table>
@@ -147,6 +157,7 @@ if ($q != '') {
         <?php endif; ?>
 
         <?php if (count($books) > 0): ?>
+            <!-- Results: Book Matches -->
             <div class="result-section">
                 <div class="section-title">📖 Buku Ditemui</div>
                 <table>
@@ -183,6 +194,7 @@ if ($q != '') {
         <?php endif; ?>
 
         <?php if (count($categories) > 0): ?>
+            <!-- Results: Category Matches -->
             <div class="result-section">
                 <div class="section-title">📚 Kategori Ditemui</div>
                 <?php foreach ($categories as $cat): ?>

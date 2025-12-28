@@ -7,24 +7,28 @@ $results = [];
 
 switch ($type) {
     case 'active':
+        // Show books currently borrowed (Return Date is NULL)
         $page_title = "Pinjaman Aktif (Sedang Dipinjam)";
         $sql = "SELECT t.*, r.full_name, r.student_id, b.title, b.book_id FROM transactions t JOIN readers r ON t.reader_id = r.reader_id JOIN books b ON t.book_id = b.book_id WHERE t.return_date IS NULL ORDER BY t.borrow_date DESC";
         $results = $conn->query($sql)->fetchAll(PDO::FETCH_ASSOC);
         break;
 
     case 'late':
+        // Show overdue books (Return Date is NULL AND Due Date < Today)
         $page_title = "Pinjaman Lewat (Melebihi Tarikh)";
         $sql = "SELECT t.*, r.full_name, r.student_id, b.title, b.book_id FROM transactions t JOIN readers r ON t.reader_id = r.reader_id JOIN books b ON t.book_id = b.book_id WHERE t.return_date IS NULL AND t.due_date < CURDATE() ORDER BY t.due_date ASC";
         $results = $conn->query($sql)->fetchAll(PDO::FETCH_ASSOC);
         break;
 
     case 'almost_late':
+        // Show books due soon (within next 3 days)
         $page_title = "Hampir Lewat (Akan Datang 3 Hari)";
         $sql = "SELECT t.*, r.full_name, r.student_id, b.title, b.book_id FROM transactions t JOIN readers r ON t.reader_id = r.reader_id JOIN books b ON t.book_id = b.book_id WHERE t.return_date IS NULL AND t.due_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 3 DAY) ORDER BY t.due_date ASC";
         $results = $conn->query($sql)->fetchAll(PDO::FETCH_ASSOC);
         break;
 
     case 'top_students':
+        // Show Top 10 Students by total number of transactions
         $page_title = "🏆 Top 10 Pelajar Paling Aktif";
         $sql = "SELECT r.student_id, r.full_name, COUNT(t.trans_id) as total_loans 
                 FROM transactions t 
@@ -37,6 +41,7 @@ switch ($type) {
 
     case 'total':
     default:
+        // Default: Show all transactions history
         $page_title = "Jumlah Semua Transaksi";
         $sql = "SELECT t.*, r.full_name, r.student_id, b.title, b.book_id FROM transactions t JOIN readers r ON t.reader_id = r.reader_id JOIN books b ON t.book_id = b.book_id ORDER BY t.borrow_date DESC";
         $results = $conn->query($sql)->fetchAll(PDO::FETCH_ASSOC);
