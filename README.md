@@ -11,7 +11,7 @@ A web-based library management system designed for Kolej Vokasional Seberang Per
   - **Status**: Visual indicators for Active (Green) and Overdue (Red) loans.
 - **Top Students Leaderboard** 🏆: Gamification feature displaying the top 10 most active readers.
 - **Category Browsing**: Visual grid of book categories (e.g., Fiction, General, Technology).
-- **Clean Interface**: Modern, responsive user interface with no code comments for easier maintenance.
+- **Clean Interface**: Modern, responsive user interface.
 
 ## 🛠 Prerequisites
 
